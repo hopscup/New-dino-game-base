@@ -2,9 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   webpack: (config) => {
-    config.externals.push("pino-pretty", "lokijs", "encoding");
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "pino-pretty": false,
+      lokijs: false,
+      encoding: false,
       "@react-native-async-storage/async-storage": false,
     };
     return config;
