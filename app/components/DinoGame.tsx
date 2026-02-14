@@ -10,8 +10,8 @@ interface DinoGameProps {
 
 export default function DinoGame({ onGameOver, isPlaying, onScoreUpdate }: DinoGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [score, setScore] = useState(0);
-  const [coins, setCoins] = useState(0);
+  const [_score, setScore] = useState(0);
+  const [_coins, setCoins] = useState(0);
   
   const gameState = useRef({
     dino: { x: 50, y: 120, vy: 0, width: 40, height: 48, jumping: false, frame: 0, runFrame: 0 },
