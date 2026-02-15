@@ -98,7 +98,7 @@ export default function Home() {
     const bestByPlayer = new Map<string, { player: string; score: bigint }>();
     for (const entry of globalTop10) {
       const score = BigInt(entry.score);
-      if (score <= 0n) continue;
+      if (score <= BigInt(0)) continue;
       const addr = entry.player.toLowerCase();
       const existing = bestByPlayer.get(addr);
       if (!existing || score > existing.score) {
