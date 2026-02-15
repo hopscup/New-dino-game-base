@@ -4,10 +4,16 @@ import { useState, useEffect, useMemo } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useSwitchChain } from 'wagmi';
 import { parseEther } from 'viem';
 import { ConnectWallet } from '@coinbase/onchainkit/wallet';
+import { useMiniKit } from '@coinbase/onchainkit/minikit';
 import DinoGame from './components/DinoGame';
 import { DINO_CONTRACT_ADDRESS, DINO_CONTRACT_ABI } from './contracts/DinoGame';
 
 export default function Home() {
+  const { setMiniAppReady } = useMiniKit();
+
+  useEffect(() => {
+    setMiniAppReady();
+  }, [setMiniAppReady]);
   const { address, isConnected, chainId } = useAccount();
   const { switchChain } = useSwitchChain();
   const isWrongNetwork = isConnected && chainId !== undefined && chainId !== 8453;
