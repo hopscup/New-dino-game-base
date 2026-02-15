@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useSwitchChain } from 'wagmi';
 import { parseEther } from 'viem';
 import { ConnectWallet } from '@coinbase/onchainkit/wallet';
@@ -92,6 +92,22 @@ export default function Home() {
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
+
+  const uniqueLeaderboard = useMemo(() => {
+    if (!globalTop10) return [];
+    const bestByPlayer = new Map<string, { player: string; score: bigint }>();
+    for (const entry of globalTop10) {
+      const score = BigInt(entry.score);
+      if (score <= 0n) continue;
+      const addr = entry.player.toLowerCase();
+      const existing = bestByPlayer.get(addr);
+      if (!existing || score > existing.score) {
+        bestByPlayer.set(addr, { player: entry.player, score });
+      }
+    }
+    return Array.from(bestByPlayer.values())
+      .sort((a, b) => (b.score > a.score ? 1 : b.score < a.score ? -1 : 0));
+  }, [globalTop10]);
 
   return (
     <div style={{
@@ -481,9 +497,8 @@ export default function Home() {
           }}>
             🌍 GLOBAL TOP 10
           </h3>
-          {globalTop10.map((entry, i) => (
-            Number(entry.score) > 0 && (
-              <div key={i} style={{
+          {uniqueLeaderboard.map((entry, i) => (
+              <div key={entry.player} style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
@@ -504,9 +519,8 @@ export default function Home() {
                   {Number(entry.score)}
                 </span>
               </div>
-            )
           ))}
-          {!globalTop10.some(e => Number(e.score) > 0) && (
+          {uniqueLeaderboard.length === 0 && (
             <p style={{ color: '#0052FF', opacity: 0.5, textAlign: 'center', fontSize: '14px' }}>
               No scores yet. Be the first! 🚀
             </p>
