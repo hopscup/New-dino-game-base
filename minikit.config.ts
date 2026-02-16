@@ -32,7 +32,7 @@ export const minikitConfig = {
     tags: ["game", "arcade", "onchain", "base"],
     heroImageUrl: `${ROOT_URL}/hero.png`,
     tagline: "Jump, survive, compete onchain",
-    ogTitle: "Dino Run - onchain Arcade",
+    ogTitle: "Dino Run - Onchain Arcade",
     ogDescription: "Pay 1 cent to play, compete for the global leaderboard. Scores stored fully onchain.",
     ogImageUrl: `${ROOT_URL}/hero.png`,
     noindex: false,
