@@ -1,12 +1,41 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useSwitchChain } from 'wagmi';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useSwitchChain, useDisconnect } from 'wagmi';
 import { parseEther } from 'viem';
 import { ConnectWallet } from '@coinbase/onchainkit/wallet';
 import { useMiniKit } from '@coinbase/onchainkit/minikit';
+import { Name } from '@coinbase/onchainkit/identity';
+import { base } from 'wagmi/chains';
 import DinoGame from './components/DinoGame';
+import type { DinoGameHandle } from './components/DinoGame';
 import { DINO_CONTRACT_ADDRESS, DINO_CONTRACT_ABI } from './contracts/DinoGame';
+
+function PlayerName({ address }: { address: string }) {
+  const [fcName, setFcName] = useState<string | null>(null);
+  const [triedFc, setTriedFc] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch(`/api/resolve-names?address=${address}`)
+      .then(r => r.json())
+      .then(data => {
+        if (!cancelled) {
+          if (data.name) setFcName(data.name);
+          setTriedFc(true);
+        }
+      })
+      .catch(() => { if (!cancelled) setTriedFc(true); });
+
+    return () => { cancelled = true; };
+  }, [address]);
+
+  if (fcName) return <span>{fcName}</span>;
+  if (!triedFc) return <span>{`${address.slice(0, 6)}...${address.slice(-4)}`}</span>;
+
+  return <Name address={address as `0x${string}`} chain={base} />;
+}
 
 export default function Home() {
   const { setMiniAppReady } = useMiniKit();
@@ -14,19 +43,24 @@ export default function Home() {
   useEffect(() => {
     setMiniAppReady();
   }, [setMiniAppReady]);
+
   const { address, isConnected, chainId } = useAccount();
   const { switchChain } = useSwitchChain();
+  const { disconnect } = useDisconnect();
   const isWrongNetwork = isConnected && chainId !== undefined && chainId !== 8453;
-  
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [lastScore, setLastScore] = useState(0);
   const [hasPaid, setHasPaid] = useState(false);
   const [showGameOver, setShowGameOver] = useState(false);
   const [isNewHighScore, setIsNewHighScore] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const gameRef = useRef<DinoGameHandle>(null);
 
   const { writeContract: payToPlay, data: payHash, isPending: isPaying } = useWriteContract();
   const { writeContract: submitScore } = useWriteContract();
-  
+
   const { isSuccess: payConfirmed } = useWaitForTransactionReceipt({ hash: payHash });
 
   const { data: personalBest, refetch: refetchPersonal } = useReadContract({
@@ -50,12 +84,12 @@ export default function Home() {
 
   const handlePay = () => {
     if (!isConnected) return;
-    
+
     if (isWrongNetwork) {
       switchChain({ chainId: 8453 });
       return;
     }
-    
+
     payToPlay({
       address: DINO_CONTRACT_ADDRESS,
       abi: DINO_CONTRACT_ABI,
@@ -76,10 +110,10 @@ export default function Home() {
     setIsPlaying(false);
     setHasPaid(false);
     setShowGameOver(true);
-    
+
     const currentBest = personalBest ? Number(personalBest[0]) : 0;
     setIsNewHighScore(score > currentBest);
-    
+
     if (isConnected && score > 0) {
       submitScore({
         address: DINO_CONTRACT_ADDRESS,
@@ -87,13 +121,19 @@ export default function Home() {
         functionName: 'submitScore',
         args: [BigInt(score)],
       });
-      
+
       setTimeout(() => {
         refetchPersonal();
         refetchGlobal();
       }, 3000);
     }
   };
+
+  const handleJump = useCallback(() => {
+    if (isPlaying) {
+      gameRef.current?.jump();
+    }
+  }, [isPlaying]);
 
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
@@ -128,7 +168,7 @@ export default function Home() {
       position: 'relative',
       overflow: 'hidden'
     }}>
-      
+
       <div style={{
         position: 'absolute',
         top: '10%',
@@ -150,8 +190,97 @@ export default function Home() {
         pointerEvents: 'none'
       }} />
 
-      <div style={{ position: 'absolute', top: '20px', right: '20px' }}>
-        <ConnectWallet />
+      {/* Burger menu (when connected) or ConnectWallet (when not) */}
+      <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 50 }}>
+        {isConnected ? (
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              style={{
+                background: 'rgba(255, 255, 255, 0.9)',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(0, 82, 255, 0.15)',
+                borderRadius: '12px',
+                padding: '10px 12px',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+                boxShadow: '0 4px 12px rgba(0, 82, 255, 0.1)',
+              }}
+            >
+              <div style={{ width: '20px', height: '2px', background: '#0052FF', borderRadius: '1px', transition: 'all 0.2s' }} />
+              <div style={{ width: '20px', height: '2px', background: '#0052FF', borderRadius: '1px', transition: 'all 0.2s' }} />
+              <div style={{ width: '20px', height: '2px', background: '#0052FF', borderRadius: '1px', transition: 'all 0.2s' }} />
+            </button>
+
+            {menuOpen && (
+              <>
+                <div
+                  onClick={() => setMenuOpen(false)}
+                  style={{
+                    position: 'fixed',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    zIndex: -1,
+                  }}
+                />
+                <div style={{
+                  position: 'absolute',
+                  top: '52px',
+                  right: 0,
+                  background: 'rgba(255, 255, 255, 0.95)',
+                  backdropFilter: 'blur(20px)',
+                  borderRadius: '16px',
+                  padding: '16px',
+                  boxShadow: '0 8px 30px rgba(0, 82, 255, 0.2)',
+                  border: '1px solid rgba(0, 82, 255, 0.1)',
+                  minWidth: '220px',
+                }}>
+                  <div style={{
+                    color: '#0052FF',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    opacity: 0.5,
+                    marginBottom: '4px',
+                    letterSpacing: '1px',
+                  }}>
+                    WALLET
+                  </div>
+                  <div style={{
+                    color: '#0052FF',
+                    fontSize: '14px',
+                    fontWeight: '700',
+                    marginBottom: '16px',
+                    padding: '8px 12px',
+                    background: 'rgba(0, 82, 255, 0.06)',
+                    borderRadius: '10px',
+                    wordBreak: 'break-all',
+                  }}>
+                    {address && formatAddress(address)}
+                  </div>
+                  <button
+                    onClick={() => { disconnect(); setMenuOpen(false); }}
+                    style={{
+                      width: '100%',
+                      background: 'rgba(255, 68, 68, 0.08)',
+                      color: '#FF4444',
+                      border: '1px solid rgba(255, 68, 68, 0.2)',
+                      borderRadius: '12px',
+                      padding: '12px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <ConnectWallet />
+        )}
       </div>
 
       <div style={{
@@ -223,7 +352,23 @@ export default function Home() {
           fontWeight: '600',
           marginBottom: '16px',
         }}>
-          ⚠️ Wrong network! Please switch to Base
+          Wrong network! Please switch to Base
+        </div>
+      )}
+
+      {/* PLAYING badge - outside game container to avoid overlap */}
+      {isPlaying && (
+        <div style={{
+          background: 'linear-gradient(135deg, #0052FF, #0066FF)',
+          color: 'white',
+          padding: '6px 20px',
+          borderRadius: '20px',
+          fontSize: '14px',
+          fontWeight: '700',
+          boxShadow: '0 4px 12px rgba(0, 82, 255, 0.35)',
+          marginBottom: '10px',
+        }}>
+          🎮 PLAYING
         </div>
       )}
 
@@ -234,28 +379,9 @@ export default function Home() {
         padding: '16px',
         boxShadow: '0 12px 40px rgba(0, 82, 255, 0.18)',
         border: '1px solid rgba(0, 82, 255, 0.08)',
-        position: 'relative'
+        position: 'relative',
       }}>
-        {isPlaying && (
-          <div style={{
-            position: 'absolute',
-            top: '-12px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'linear-gradient(135deg, #0052FF, #0066FF)',
-            color: 'white',
-            padding: '6px 20px',
-            borderRadius: '20px',
-            fontSize: '14px',
-            fontWeight: '700',
-            boxShadow: '0 4px 12px rgba(0, 82, 255, 0.35)',
-            zIndex: 10
-          }}>
-            🎮 PLAYING
-          </div>
-        )}
-        
-        <DinoGame onGameOver={handleGameOver} isPlaying={isPlaying} />
+        <DinoGame ref={gameRef} onGameOver={handleGameOver} isPlaying={isPlaying} />
       </div>
 
       <p style={{
@@ -267,6 +393,23 @@ export default function Home() {
       }}>
         SPACE / Tap to jump 🦘
       </p>
+
+      {/* Full-screen tap overlay during gameplay */}
+      {isPlaying && (
+        <div
+          onClick={handleJump}
+          onTouchStart={(e) => { e.preventDefault(); handleJump(); }}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 5,
+            touchAction: 'none',
+          }}
+        />
+      )}
 
       {showGameOver && !isPlaying && (
         <div style={{
@@ -313,29 +456,29 @@ export default function Home() {
             >
               ✕
             </button>
-            
+
             <div style={{ fontSize: '56px', marginBottom: '12px' }}>
               {isNewHighScore ? '🏆' : '💀'}
             </div>
-            
-            <h2 style={{ 
-              color: '#0052FF', 
-              fontSize: '22px', 
-              fontWeight: '800', 
+
+            <h2 style={{
+              color: '#0052FF',
+              fontSize: '22px',
+              fontWeight: '800',
               margin: '0 0 4px 0',
             }}>
               {isNewHighScore ? 'NEW HIGH SCORE!' : 'GAME OVER'}
             </h2>
-            
-            <p style={{ 
-              color: '#0052FF', 
-              fontSize: '56px', 
-              fontWeight: '800', 
+
+            <p style={{
+              color: '#0052FF',
+              fontSize: '56px',
+              fontWeight: '800',
               margin: '8px 0 20px 0',
             }}>
               {lastScore}
             </p>
-            
+
             {isNewHighScore && (
               <div style={{
                 background: 'linear-gradient(135deg, #FFD700, #FFA500)',
@@ -349,7 +492,7 @@ export default function Home() {
                 🎉 Saved onchain! 🎉
               </div>
             )}
-            
+
             {!hasPaid ? (
               <button
                 onClick={handlePay}
@@ -513,15 +656,15 @@ export default function Home() {
                 borderRadius: '10px',
                 marginBottom: '6px',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+                  <span style={{ fontSize: '16px', flexShrink: 0 }}>
                     {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
                   </span>
-                  <span style={{ color: '#0052FF', fontSize: '13px', opacity: 0.7 }}>
-                    {formatAddress(entry.player)}
+                  <span style={{ color: '#0052FF', fontSize: '13px', opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <PlayerName address={entry.player} />
                   </span>
                 </div>
-                <span style={{ color: '#0052FF', fontWeight: '800', fontSize: '16px' }}>
+                <span style={{ color: '#0052FF', fontWeight: '800', fontSize: '16px', flexShrink: 0, marginLeft: '8px' }}>
                   {Number(entry.score)}
                 </span>
               </div>
@@ -581,6 +724,8 @@ export default function Home() {
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
+            position: 'relative',
+            zIndex: 10,
           }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 
 interface DinoGameProps {
   onGameOver: (score: number) => void;
@@ -8,7 +8,11 @@ interface DinoGameProps {
   onScoreUpdate?: (score: number) => void;
 }
 
-export default function DinoGame({ onGameOver, isPlaying, onScoreUpdate }: DinoGameProps) {
+export interface DinoGameHandle {
+  jump: () => void;
+}
+
+const DinoGame = forwardRef<DinoGameHandle, DinoGameProps>(function DinoGame({ onGameOver, isPlaying, onScoreUpdate }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [_score, setScore] = useState(0);
   const [_coins, setCoins] = useState(0);
@@ -53,6 +57,8 @@ export default function DinoGame({ onGameOver, isPlaying, onScoreUpdate }: DinoG
       }
     }
   }, []);
+
+  useImperativeHandle(ref, () => ({ jump }), [jump]);
 
   // Detailed T-Rex sprite
   const drawDino = (ctx: CanvasRenderingContext2D, x: number, y: number, runFrame: number, jumping: boolean) => {
@@ -373,14 +379,7 @@ export default function DinoGame({ onGameOver, isPlaying, onScoreUpdate }: DinoG
       }
     };
 
-    const handleTouch = (e: Event) => {
-      e.preventDefault();
-      jump();
-    };
-
     window.addEventListener('keydown', handleKeyDown);
-    canvas.addEventListener('touchstart', handleTouch);
-    canvas.addEventListener('click', handleTouch);
 
     let animationId: number;
 
@@ -654,8 +653,6 @@ export default function DinoGame({ onGameOver, isPlaying, onScoreUpdate }: DinoG
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      canvas.removeEventListener('touchstart', handleTouch);
-      canvas.removeEventListener('click', handleTouch);
       cancelAnimationFrame(animationId);
     };
   }, [isPlaying, jump, onGameOver, onScoreUpdate]);
@@ -669,9 +666,13 @@ export default function DinoGame({ onGameOver, isPlaying, onScoreUpdate }: DinoG
         style={{
           borderRadius: '20px',
           boxShadow: '0 10px 40px rgba(0, 82, 255, 0.25)',
-          border: '3px solid rgba(0, 82, 255, 0.2)'
+          border: '3px solid rgba(0, 82, 255, 0.2)',
+          maxWidth: '100%',
+          height: 'auto',
         }}
       />
     </div>
   );
-}
+});
+
+export default DinoGame;
