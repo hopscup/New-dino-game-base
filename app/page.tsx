@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useSwitchChain, useDisconnect } from 'wagmi';
-import { parseEther } from 'viem';
+import { useAccount, useWriteContract, useReadContract, useSwitchChain, useDisconnect } from 'wagmi';
+import { useSendCalls, useCallsStatus } from 'wagmi/experimental';
+import { parseEther, encodeFunctionData } from 'viem';
+import { Attribution } from 'ox/erc8021';
 import { ConnectWallet } from '@coinbase/onchainkit/wallet';
 import { useMiniKit } from '@coinbase/onchainkit/minikit';
 import { Name } from '@coinbase/onchainkit/identity';
@@ -10,6 +12,8 @@ import { base } from 'wagmi/chains';
 import DinoGame from './components/DinoGame';
 import type { DinoGameHandle } from './components/DinoGame';
 import { DINO_CONTRACT_ADDRESS, DINO_CONTRACT_ABI } from './contracts/DinoGame';
+
+const BUILDER_CODE_SUFFIX = Attribution.toDataSuffix({ codes: ['bc_w4d5vvy9'] });
 
 function PlayerName({ address }: { address: string }) {
   const [fcName, setFcName] = useState<string | null>(null);
@@ -58,10 +62,19 @@ export default function Home() {
 
   const gameRef = useRef<DinoGameHandle>(null);
 
-  const { writeContract: payToPlay, data: payHash, isPending: isPaying } = useWriteContract();
+  const { sendCalls: payToPlay, data: payCallsId, isPending: isPaying } = useSendCalls();
   const { writeContract: submitScore } = useWriteContract();
 
-  const { isSuccess: payConfirmed } = useWaitForTransactionReceipt({ hash: payHash });
+  const payBundleId = payCallsId?.id;
+  const { data: payCallsStatus } = useCallsStatus({
+    id: payBundleId as string,
+    query: {
+      enabled: !!payBundleId,
+      refetchInterval: (query) =>
+        query.state.data?.status === 'success' ? false : 1000,
+    },
+  });
+  const payConfirmed = payCallsStatus?.status === 'success';
 
   const { data: personalBest, refetch: refetchPersonal } = useReadContract({
     address: DINO_CONTRACT_ADDRESS,
@@ -91,10 +104,20 @@ export default function Home() {
     }
 
     payToPlay({
-      address: DINO_CONTRACT_ADDRESS,
-      abi: DINO_CONTRACT_ABI,
-      functionName: 'payToPlay',
-      value: parseEther('0.000004'),
+      calls: [{
+        to: DINO_CONTRACT_ADDRESS,
+        data: encodeFunctionData({
+          abi: DINO_CONTRACT_ABI,
+          functionName: 'payToPlay',
+        }),
+        value: parseEther('0.000004'),
+      }],
+      capabilities: {
+        dataSuffix: {
+          value: BUILDER_CODE_SUFFIX,
+          optional: true,
+        },
+      },
     });
   };
 
