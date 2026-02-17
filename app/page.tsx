@@ -114,7 +114,8 @@ export default function Home() {
     const currentBest = personalBest ? Number(personalBest[0]) : 0;
     setIsNewHighScore(score > currentBest);
 
-    if (isConnected && score > 0) {
+    const lowestTop3 = personalBest ? Number(personalBest[2]) : 0;
+    if (isConnected && score > 0 && score > lowestTop3) {
       submitScore({
         address: DINO_CONTRACT_ADDRESS,
         abi: DINO_CONTRACT_ABI,
