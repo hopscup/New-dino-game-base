@@ -28,5 +28,9 @@ export async function GET() {
       : {}),
   };
 
-  return NextResponse.json(manifest);
+  return NextResponse.json(manifest, {
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    },
+  });
 }
